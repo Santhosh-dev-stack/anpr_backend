@@ -83,6 +83,14 @@ class SegmentStore:
         # computed here, since counting "new track" is the tracker's job.
         self.vehicle_count = 0
 
+    @classmethod
+    def for_live(cls) -> "SegmentStore":
+        return cls(bounded=True)
+
+    @classmethod
+    def for_file(cls) -> "SegmentStore":
+        return cls(bounded=False)
+
     def set_vehicle_count(self, count: int) -> None:
         with self._lock:
             self.vehicle_count = count

@@ -13,7 +13,7 @@ hls_output/
 
 # Model weights — large binaries (6-22MB+); fetch/download separately
 # (e.g. a setup script or release artifact) rather than committing to git.
-**/models/*.pt
+# **/models/*.pt
 **/models/*.onnx
 
 # Environment/secrets
@@ -24,6 +24,7 @@ hls_output/
 .vscode/
 .idea/
 .DS_Store
+.claude/
 
 # Large test videos / archives / logs / result dumps — not source, no need
 # to version-control these multi-hundred-MB files for a code-refactor
