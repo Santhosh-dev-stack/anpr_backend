@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Runtime output — regenerated on every run, never worth committing
+hls_output/
+
+# Model weights — large binaries (6-22MB+); fetch/download separately
+# (e.g. a setup script or release artifact) rather than committing to git.
+**/models/*.pt
+**/models/*.onnx
+
+# Environment/secrets
+.env
+.env.local
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Large test videos / archives / logs / result dumps — not source, no need
+# to version-control these multi-hundred-MB files for a code-refactor
+# safety net.
+*.mp4
+*.zip
+*.log
+results/
+local_results*.csv
