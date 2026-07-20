@@ -6,7 +6,7 @@ from typing import Callable
 import numpy as np
 
 from app.ocr.plate_reader import PlateReader
-from app.ocr.plate_validator import normalize_plate
+from app.ocr.plate_validator import is_standard_format, normalize_plate
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -110,7 +110,20 @@ class OcrWorker:
                     )
                 else:
                     normalized = normalize_plate(result.text)
-                    if normalized is not None:
+                    # normalize_plate's wider format (1-2 RTO digits, 0-3
+                    # series letters, 3-4 number digits) accepts real plate
+                    # variance, but that same width lets a garbled OCR read
+                    # coincidentally land on a completely different, valid-
+                    # looking plate (e.g. a misread landing on a real state
+                    # code like 'MZ' by chance) — format + state-code alone
+                    # can't tell that apart from a genuine read. Gating the
+                    # final accept on the strict standard shape trades away
+                    # correctly reading real series-less plates (a real but
+                    # rarer case) for rejecting those coincidental garbage
+                    # matches (measured directly: this is what let a
+                    # misread of a real TN plate through as an unrelated-
+                    # looking 'MZ8J3333').
+                    if normalized is not None and is_standard_format(normalized):
                         self._on_result(
                             job.track_id, job.frame_id, job.timestamp, job.vehicle_type, job.plate_category,
                             normalized, result.confidence, job.plate_crop, job.vehicle_crop, "accepted",

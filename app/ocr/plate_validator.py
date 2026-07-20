@@ -9,6 +9,18 @@ _PLATE_PATTERN = re.compile(r"^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{3,4}$")
 _MIN_LENGTH = 8
 _MAX_LENGTH = 11
 
+# The textbook 4-part Indian plate shape: 2-letter state code, exactly 2
+# RTO digits, 1-2 series letters, exactly 4 number digits (e.g. TN97A6500,
+# KA05MH1234). Stricter than _PLATE_PATTERN above on purpose — this is an
+# additional, informational check (see is_standard_format), not a
+# replacement: _PLATE_PATTERN's wider ranges (1-2 RTO digits, 0-3 series
+# letters, 3-4 number digits) stay the actual accept/reject gate, since
+# real plates legitimately fall outside this exact shape (older 3-digit
+# numbers, series-less older plates, single-digit RTO codes on some
+# states) and normalize_plate's OCR-confusion correction already targets
+# that wider range deliberately.
+_STANDARD_PLATE_PATTERN = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$")
+
 # All current Indian state/UT RTO codes, plus BH (the unified "Bharat" series).
 # Used to correct a single misread letter in the state-code prefix (e.g. OCR
 # confusing visually similar letters like N/H) — a real plate's first two
@@ -57,6 +69,17 @@ def is_valid_plate(text: str) -> bool:
     if not _PLATE_PATTERN.fullmatch(text):
         return False
     return text[:2] in _VALID_STATE_CODES
+
+
+def is_standard_format(text: str) -> bool:
+    """Checks a plate string (expected to already be a normalize_plate()
+    output) against the textbook 4-part shape — state code, 2 RTO digits,
+    1-2 series letters, 4 number digits — rather than the wider range
+    is_valid_plate() actually accepts. Purely informational: use this to
+    flag/log whether a final accepted reading happens to match the classic
+    format, not to reject readings that don't (see module comment above).
+    """
+    return bool(_STANDARD_PLATE_PATTERN.fullmatch(text)) and text[:2] in _VALID_STATE_CODES
 
 
 def _differing_letter_pair(a: str, b: str) -> frozenset | None:

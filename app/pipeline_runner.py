@@ -40,10 +40,15 @@ def build_sink() -> ResultSink:
     if DATABASE_URL:
         from app.database.db_sink import DbSink
         from app.database.schema import init_schema
+        from app.services.async_sink import AsyncSink
 
         init_schema()
-        sinks.append(DbSink())
-        logger.info("DATABASE_URL set — persisting results to PostgreSQL")
+        # DbSink.emit() does a network round-trip per call — on the main
+        # pipeline thread that stalls every frame with a tracked plate, not
+        # just accepted OCR reads. AsyncSink moves it to a background
+        # thread (see its docstring for what this was measured to fix).
+        sinks.append(AsyncSink(DbSink()))
+        logger.info("DATABASE_URL set — persisting results to PostgreSQL (async)")
     else:
         logger.info("DATABASE_URL not set — results will only be printed, not persisted")
     return CompositeSink(sinks)

@@ -23,17 +23,17 @@ if DEVICE == "cpu":
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BACKEND_DIR / "models"
 
-PLATE_MODEL_PATH = str(MODELS_DIR / "vechile_plate_yolov8s.pt")
+PLATE_MODEL_PATH = str(MODELS_DIR / "vechile_plate_yolov8s_v2.pt")
 PLATE_CONF_THRESHOLD = 0.20
 # The yolov8s plate weight is ~4x larger than the nano weight and runs on the
 # full frame (no vehicle-crop stage first) — at imgsz=960 that was 1-2.4s per
-# frame on this CPU (vs. 0.2-0.6s for the nano weight), dropping most of the
-# already-decimated frames before they could even be processed. Trading
-# lower imgsz for speed here (960 -> 640, same as the old vehicle stage
-# used) costs some small/distant-plate recall but keeps frame throughput
-# high enough that boxes actually show up regularly instead of once every
-# few seconds.
-PLATE_DETECTION_IMGSZ = 640
+# frame on the old CPU deployment (vs. 0.2-0.6s for the nano weight),
+# dropping most of the already-decimated frames before they could even be
+# processed. That's why this was traded down to 640 there. On this GPU-PC
+# deployment, imgsz=960 measured at ~31ms/frame (see the full pipeline
+# timing benchmark) — GPU headroom makes the higher imgsz affordable again,
+# recovering small/distant-plate recall that 640 traded away.
+PLATE_DETECTION_IMGSZ = 960
 # This weight is a combined vehicle+plate model (12 classes: car, truck,
 # bus, motorcycle, bicycle, auto, van, emergency_vehicle, tractor, hcm_eme,
 # cart, number_plate) — the pipeline still only wants plates, so detection
@@ -50,6 +50,7 @@ FRAME_QUEUE_MAXSIZE = 10
 # matcher to still follow normal traffic motion. None/0 disables decimation
 # (process every frame).
 PROCESSING_FPS = 5
+
 
 RTSP_RECONNECT_INITIAL_DELAY = 1.0
 RTSP_RECONNECT_MAX_DELAY = 30.0
