@@ -74,7 +74,7 @@ def _run_live_cycle(source: str, camera_id: str, pipeline: Pipeline) -> None:
                 segment_durations = []
                 segment_wall_start = time.monotonic()
                 store = segment_store.SegmentStore.for_live()
-                store.hls_generation = last_seen_hls_generation
+                store.generation = last_seen_hls_generation
                 segment_store.register(camera_id, store)
                 logger.info(
                     "HLS generation changed to %d for camera %s — reset segment epoch",

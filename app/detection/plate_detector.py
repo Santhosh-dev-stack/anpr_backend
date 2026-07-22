@@ -14,11 +14,11 @@ class PlateDetector:
     COCO pretrained YOLO has no license-plate class, so this expects a
     separately trained weight with a plate class (see PLATE_CLASS_NAME in
     app/config.py — the current weight is a combined vehicle+plate model,
-    filtered down to just its plate class by PlateTracker). The underlying
-    `model` is used directly by tracking.plate_tracker.PlateTracker rather
-    than through a predict-on-a-crop method — plates are detected and
-    tracked straight on the full frame, with no separate vehicle-detection
-    stage first.
+    filtered down to just its plate class by VehicleTracker). The underlying
+    `model` is used directly by tracking.vehicle_tracker.VehicleTracker
+    rather than through a predict-on-a-crop method — vehicles and plates are
+    detected together on the full frame, with no separate detection stage
+    per class.
     """
 
     def __init__(self, model_path: str = PLATE_MODEL_PATH, device: str = DEVICE):

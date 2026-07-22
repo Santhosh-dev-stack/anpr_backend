@@ -66,9 +66,11 @@ def bootstrap(camera_id: str, api_host: str, api_port: int) -> tuple[Pipeline, P
     config.PUBLIC_PORT = api_port
 
     # Loaded once and reused across cycles — reloading models on every replay
-    # of a video file would be wasteful, and PlateTracker degrades gracefully
-    # across a source restart (new track_ids get assigned once motion
-    # prediction can no longer match, same as a real camera scene cut).
+    # of a video file would be wasteful. VehicleTracker's ByteTrack state
+    # needs an explicit reset at each cycle boundary to degrade gracefully
+    # across a source restart (see Pipeline.reset_for_new_cycle, called by
+    # the static entrypoint before each cycle) rather than doing so
+    # automatically the way the old time-based tracker did.
     pipeline = Pipeline(camera_id=camera_id, sink=build_sink())
 
     api_server = ApiServer(host=api_host, port=api_port)

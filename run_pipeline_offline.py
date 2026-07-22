@@ -2,12 +2,12 @@
 and dump a per-track results CSV — no FastAPI/DB/websocket/RTSP involved.
 
 Uses the exact same classes as the production pipeline (PlateDetector,
-PlateTracker, PlateReader, normalize_plate — see app/services/pipeline.py)
+VehicleTracker, PlateReader, normalize_plate — see app/services/pipeline.py)
 so this is not a re-implementation that could drift from production
 behavior, just the same logic run synchronously against a file instead of
-a live camera. OCR runs on every tracked plate every frame, unthrottled,
-matching production (see app/services/pipeline.py / ocr_worker.py — the
-OcrGate throttle was removed).
+a live camera. OCR runs on every tracked vehicle with a plate found in it
+every frame, unthrottled, matching production (see app/services/pipeline.py
+/ ocr_worker.py — the OcrGate throttle was removed).
 
 Purpose: produce a baseline CSV on this (CPU) machine, then run the paired
 Colab notebook (colab_full_pipeline_test.ipynb) on the same video with the
@@ -16,10 +16,10 @@ whether GPU inference changes *what* gets detected/read, not just how fast.
 
 Writes two CSVs:
   --out         one row per track: best/validated plate reading summary.
-  --frames-out  one row per detected plate *per frame*: bbox coordinates,
+  --frames-out  one row per tracked vehicle *per frame*: bbox coordinates,
                 detection confidence/inference time, and (on frames where
-                OCR ran) the raw OCR text/confidence/inference time and
-                whether it passed validation.
+                a plate was found and OCR ran) the raw OCR text/confidence/
+                inference time and whether it passed validation.
 
 By default decimates the source to --target-fps (5, matching production's
 PROCESSING_FPS in app/config.py) using the exact same fixed-stride formula as
@@ -29,12 +29,13 @@ decimation) — useful for stress-testing tracking independent of what
 production's frame rate happens to skip.
 
 Known, intentional difference from production: this script reports
-PlateTracker's raw track_ids as-is, so a plate PlateTracker fragmented into
-2-3 track_ids (see TRACKING_APPROACH_COMPARISON_REPORT.md) still shows up as
-that many rows here. Production additionally runs each *accepted* reading
-through app.services.plate_identity.PlateIdentity to fold such fragments
-back into a single reported vehicle — left out here on purpose, since this
-script's value is showing the tracker's actual raw behavior for diagnosis.
+VehicleTracker's raw track_ids as-is, so a vehicle VehicleTracker fragmented
+into 2-3 track_ids (see app/tracking/vehicle_tracker.py's docstring for
+measured fragmentation rates) still shows up as that many rows here.
+Production additionally runs each *accepted* reading through
+app.services.plate_identity.PlateIdentity to fold such fragments back into
+a single reported vehicle — left out here on purpose, since this script's
+value is showing the tracker's actual raw behavior for diagnosis.
 
 Run from the backend/ directory:
     python run_pipeline_offline.py --source /path/to/vid1.mp4 --out local_results.csv --frames-out local_frames.csv
@@ -49,7 +50,7 @@ import cv2
 from app.detection.plate_detector import PlateDetector
 from app.ocr.plate_reader import PlateReader
 from app.ocr.plate_validator import normalize_plate
-from app.tracking.plate_tracker import PlateTracker
+from app.tracking.vehicle_tracker import VehicleTracker
 
 
 def _crop(frame, bbox):
@@ -87,7 +88,7 @@ def main() -> None:
     frames_out = args.frames_out or args.out.rsplit(".", 1)[0] + "_frames.csv"
 
     detector = PlateDetector()
-    tracker = PlateTracker(detector)
+    tracker = VehicleTracker(detector)
     ocr_reader = PlateReader()
 
     cap = cv2.VideoCapture(args.source)
@@ -134,51 +135,59 @@ def main() -> None:
         tracked = tracker.track(frame, video_time)
         detect_ms = (time.perf_counter() - t_detect) * 1000
 
-        for plate in tracked:
-            record = records.get(plate.track_id)
+        for vehicle in tracked:
+            record = records.get(vehicle.track_id)
             if record is None:
-                record = TrackRecord(plate.vehicle_type, frame_id)
-                records[plate.track_id] = record
+                record = TrackRecord(vehicle.vehicle_type, frame_id)
+                records[vehicle.track_id] = record
             record.last_frame = frame_id
 
-            vx1, vy1, vx2, vy2 = plate.vehicle_bbox if plate.vehicle_bbox else ("", "", "", "")
-            px1, py1, px2, py2 = plate.bbox
+            # vehicle.bbox IS the tracked entity's own box now — always
+            # present, unlike the old plate-centric TrackedPlate.vehicle_bbox
+            # (which could be None if no containing vehicle box was found).
+            vx1, vy1, vx2, vy2 = vehicle.bbox
+            px1, py1, px2, py2 = vehicle.plate_bbox if vehicle.plate_bbox else ("", "", "", "")
+            plate_conf_str = f"{vehicle.plate_confidence:.3f}" if vehicle.plate_confidence is not None else ""
 
-            crop = _crop(frame, plate.bbox)
-            # No throttling gate — OCR runs on every tracked plate every
-            # frame, matching production (see app/services/pipeline.py).
-            ocr_ran = crop.size > 0
+            ocr_ran = False
             ocr_raw_text = ocr_confidence = ocr_validated = ocr_status = ""
             ocr_ms = ""
 
-            if ocr_ran:
-                t_ocr = time.perf_counter()
-                result = ocr_reader.read(crop)
-                ocr_ms = f"{(time.perf_counter() - t_ocr) * 1000:.1f}"
+            # OCR only runs when a plate was actually found inside this
+            # vehicle's box this frame — matching production
+            # (Pipeline._process_vehicle), no throttling gate otherwise.
+            if vehicle.plate_bbox is not None:
+                crop = _crop(frame, vehicle.plate_bbox)
+                ocr_ran = crop.size > 0
 
-                if result is None:
-                    ocr_status = "no_text"
-                else:
-                    record.ocr_attempts += 1
-                    ocr_raw_text = result.text
-                    ocr_confidence = f"{result.confidence:.3f}"
+                if ocr_ran:
+                    t_ocr = time.perf_counter()
+                    result = ocr_reader.read(crop)
+                    ocr_ms = f"{(time.perf_counter() - t_ocr) * 1000:.1f}"
 
-                    normalized = normalize_plate(result.text)
-                    if normalized is not None:
-                        ocr_status = "accepted"
-                        ocr_validated = normalized
-                        record.readings.add(normalized)
-                        if result.confidence > record.best_confidence:
-                            record.best_text = normalized
-                            record.best_confidence = result.confidence
+                    if result is None:
+                        ocr_status = "no_text"
                     else:
-                        ocr_status = "rejected"
+                        record.ocr_attempts += 1
+                        ocr_raw_text = result.text
+                        ocr_confidence = f"{result.confidence:.3f}"
+
+                        normalized = normalize_plate(result.text)
+                        if normalized is not None:
+                            ocr_status = "accepted"
+                            ocr_validated = normalized
+                            record.readings.add(normalized)
+                            if result.confidence > record.best_confidence:
+                                record.best_text = normalized
+                                record.best_confidence = result.confidence
+                        else:
+                            ocr_status = "rejected"
 
             frames_writer.writerow([
-                frame_id, plate.track_id, plate.vehicle_type,
+                frame_id, vehicle.track_id, vehicle.vehicle_type,
                 vx1, vy1, vx2, vy2,
                 px1, py1, px2, py2,
-                f"{plate.confidence:.3f}", f"{detect_ms:.1f}",
+                plate_conf_str, f"{detect_ms:.1f}",
                 ocr_ran, ocr_raw_text, ocr_confidence, ocr_validated,
                 ocr_status, ocr_ms,
             ])

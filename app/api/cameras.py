@@ -25,14 +25,17 @@ def get_camera(camera_id: str) -> dict:
         # True unless a live (RTSP) source is currently disconnected/
         # reconnecting — always True for a file source. See FrameSource.healthy.
         "camera_connected": store.camera_healthy if store else False,
-        # Bumped whenever HlsService's watchdog restarts ffmpeg (RTSP
-        # only) — ffmpeg's segment numbering resets to 0 on relaunch, so a
-        # frontend should force a full hls.js reinit when this changes
-        # rather than assume continuous playback.
-        "hls_generation": store.hls_generation if store else 0,
+        # Bumped whenever track_id numbering restarts from scratch for this
+        # camera — a live camera's ffmpeg watchdog restart, or a static
+        # video's Play-button restart. Old track_ids are no longer
+        # meaningfully comparable to new ones once this changes — a
+        # frontend should force a full reinit (hls.js reload, clear
+        # detection tables) rather than assume continuity across it.
+        "generation": store.generation if store else 0,
         "frame_width": store.frame_width if store else None,
         "frame_height": store.frame_height if store else None,
         "vehicle_count": store.vehicle_count if store else 0,
+        "vehicle_count_by_type": store.vehicle_count_by_type if store else {},
         "started": controller.is_started() if controller else False,
     }
 

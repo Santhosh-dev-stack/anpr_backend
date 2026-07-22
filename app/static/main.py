@@ -19,6 +19,12 @@ def _run_static_cycle(source: str, camera_id: str, pipeline: Pipeline) -> None:
     """Runs the reader+HLS+pipeline loop for one pass over `source`, ending
     when the file is exhausted.
     """
+    # A Play-button restart reuses the same Pipeline across cycles — reset
+    # it so every Play click starts completely fresh (track_ids restart
+    # from 1, vehicle_count back to 0) rather than continuing to count up
+    # from the previous cycle. See Pipeline.reset_for_new_cycle's docstring.
+    pipeline.reset_for_new_cycle()
+
     reader = VideoReader(source, target_fps=PROCESSING_FPS)
     frame_queue = FrameQueue(maxsize=FRAME_QUEUE_MAXSIZE)
 
@@ -28,6 +34,11 @@ def _run_static_cycle(source: str, camera_id: str, pipeline: Pipeline) -> None:
     # poll calls segment_store.get(camera_id), which would silently no-op
     # (no store, no exception) if the store weren't already registered.
     store = segment_store.SegmentStore.for_file()
+    # Mirrors pipeline.cycle_generation (bumped by reset_for_new_cycle just
+    # above) — lets the frontend detect a Play-button restart and clear its
+    # stale display instead of showing this cycle's low, reused track_ids
+    # side-by-side with the previous cycle's unrelated vehicles.
+    store.generation = pipeline.cycle_generation
     segment_store.register(camera_id, store)
 
     hls_service = StaticHlsService(camera_id=camera_id, source=source)

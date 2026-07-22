@@ -50,12 +50,16 @@ class SegmentStore:
         # manifest before the file exists on disk (404) and hls.js
         # sometimes exhausts its retry budget without recovering.
         self.hls_manifest_ready = False
-        # Bumped by main.py whenever HlsService's watchdog restarts ffmpeg
-        # (RTSP only — see HlsService) — ffmpeg's segment numbering resets
-        # to 0 on relaunch, so the frontend needs an explicit signal to
-        # fully reinit hls.js rather than assume continuous playback across
-        # a manifest sequence-number jump backward.
-        self.hls_generation = 0
+        # Bumped whenever this camera's track_id numbering restarts from
+        # scratch — either a live camera's HlsService watchdog restarting
+        # ffmpeg (RTSP only; ffmpeg's segment numbering resets to 0 on
+        # relaunch) or a static video's Play-button restart (Pipeline.
+        # reset_for_new_cycle — track_ids there deliberately restart at 1
+        # each cycle). Either way, old track_id numbers are no longer
+        # meaningfully comparable to new ones, so the frontend needs an
+        # explicit signal to fully reinit (hls.js reload / clear detection
+        # tables) rather than assume continuity across the boundary.
+        self.generation = 0
         # True unless the live source (RTSPReader) is currently
         # disconnected/reconnecting — always True for a file source, which
         # has no such transient-outage concept. See FrameSource.healthy.
@@ -78,10 +82,14 @@ class SegmentStore:
         # later better one.
         self._ocr_attempts: list[dict] = []
         self._next_attempt_id = 1
-        # Mirrors PlateTracker.total_vehicle_count for this camera — updated
+        # Mirrors VehicleTracker.total_vehicle_count for this camera — updated
         # each frame from the pipeline (see Pipeline.process) rather than
         # computed here, since counting "new track" is the tracker's job.
         self.vehicle_count = 0
+        # Same count, broken down by vehicle_type — e.g. {"car": 12,
+        # "motorcycle": 8}. Same PlateIdentity-duplicate correction already
+        # applied to vehicle_count above, just per-type (see Pipeline.process).
+        self.vehicle_count_by_type: dict[str, int] = {}
 
     @classmethod
     def for_live(cls) -> "SegmentStore":
@@ -91,9 +99,10 @@ class SegmentStore:
     def for_file(cls) -> "SegmentStore":
         return cls(bounded=False)
 
-    def set_vehicle_count(self, count: int) -> None:
+    def set_vehicle_count(self, count: int, count_by_type: dict[str, int]) -> None:
         with self._lock:
             self.vehicle_count = count
+            self.vehicle_count_by_type = count_by_type
 
     def set_camera_healthy(self, healthy: bool) -> None:
         with self._lock:

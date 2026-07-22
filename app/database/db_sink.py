@@ -10,17 +10,17 @@ logger = get_logger(__name__)
 # a worse or empty later attempt.
 _UPSERT_SQL = """
 INSERT INTO vehicle_events (
-    camera_id, track_id, vehicle_type, plate_number, plate_category,
+    camera_id, track_id, generation, vehicle_type, plate_number, plate_category,
     vehicle_confidence, plate_confidence, ocr_confidence,
     vehicle_bbox, plate_bbox,
     first_seen_frame, last_seen_frame, first_seen_at, last_seen_at
 ) VALUES (
-    %(camera_id)s, %(track_id)s, %(vehicle_type)s, %(plate_number)s, %(plate_category)s,
+    %(camera_id)s, %(track_id)s, %(generation)s, %(vehicle_type)s, %(plate_number)s, %(plate_category)s,
     %(vehicle_confidence)s, %(plate_confidence)s, %(ocr_confidence)s,
     %(vehicle_bbox)s, %(plate_bbox)s,
     %(frame_id)s, %(frame_id)s, %(timestamp)s, %(timestamp)s
 )
-ON CONFLICT (camera_id, track_id) DO UPDATE SET
+ON CONFLICT (camera_id, generation, track_id) DO UPDATE SET
     vehicle_type = EXCLUDED.vehicle_type,
     plate_category = COALESCE(EXCLUDED.plate_category, vehicle_events.plate_category),
     vehicle_confidence = GREATEST(vehicle_events.vehicle_confidence, EXCLUDED.vehicle_confidence),
@@ -60,6 +60,7 @@ class DbSink(ResultSink):
         params = {
             "camera_id": result.camera_id,
             "track_id": result.track_id,
+            "generation": result.generation,
             "vehicle_type": result.vehicle_type,
             "plate_number": result.plate,
             "plate_category": result.plate_category,

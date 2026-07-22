@@ -23,9 +23,11 @@ class OcrJob:
     # recomputing it on this thread too.
     plate_category: str
     plate_crop: np.ndarray
-    # None when PlateTracker couldn't find a containing vehicle box for this
-    # plate (see _find_containing_vehicle in plate_tracker.py) — carried
-    # through purely for display (Detection Table), not used by OCR itself.
+    # Vehicle is the tracked entity itself now (see VehicleTracker), so this
+    # is effectively always populated — carried through purely for display
+    # (Detection Table), not used by OCR itself. Stays Optional for
+    # defensive typing, not because a real "no containing vehicle" case
+    # exists anymore.
     vehicle_crop: np.ndarray | None = None
 
 

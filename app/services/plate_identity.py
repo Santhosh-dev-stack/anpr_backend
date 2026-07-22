@@ -5,14 +5,19 @@ class PlateIdentity:
     """Reconciles the same physical vehicle appearing under more than one
     track_id.
 
-    PlateTracker occasionally fragments one plate into 2-3 track_ids when it
-    goes undetected for longer than its missed-frame tolerance (motion blur,
-    occlusion, a confidence dip) — see TRACKING_APPROACH_COMPARISON_REPORT.md.
-    That can't be fixed at tracking time: the tracker only has box
-    geometry to go on, and has no way to know two boxes seen minutes apart
-    are the same plate. It CAN be fixed once OCR resolves a validated plate
-    reading, though — if that same reading was already seen under an
-    earlier track_id, this is obviously the same vehicle, not a new one.
+    VehicleTracker (ByteTrack-based) occasionally fragments one vehicle into
+    2-3 track_ids when it goes undetected for longer than its missed-frame
+    tolerance (motion blur, occlusion, a confidence dip, or simply a small/
+    distant box IoU-matching poorly under frame decimation) — see
+    VehicleTracker's docstring for measured fragmentation rates. That can't
+    be fixed at tracking time: the tracker only has box geometry to go on,
+    and has no way to know two boxes seen seconds apart are the same
+    vehicle. It CAN be fixed once OCR resolves a validated plate reading,
+    though — if that same reading was already seen under an earlier
+    track_id, this is obviously the same vehicle, not a new one. Note this
+    only reconciles vehicles whose plate is actually read — a plateless
+    vehicle that fragments has no OCR text to reconcile against (see
+    VehicleTracker's docstring for that trade-off).
 
     Used by Pipeline._on_ocr_result: every *accepted* reading is resolved
     through here before being recorded/counted, so a fragmented track's
@@ -24,6 +29,17 @@ class PlateIdentity:
         self._lock = threading.Lock()
         self._canonical_track_id_by_plate: dict[str, int] = {}
         self._canonical_of_track_id: dict[int, int] = {}
+
+    def reset(self) -> None:
+        """Call whenever track_id numbers themselves get reused (e.g. a
+        Play-button restart that resets VehicleTracker back to track_id 1)
+        — without this, a reused track_id could resolve() against a stale
+        canonical mapping from the previous cycle's unrelated vehicle that
+        happened to reuse the same number.
+        """
+        with self._lock:
+            self._canonical_track_id_by_plate.clear()
+            self._canonical_of_track_id.clear()
 
     def resolve(self, track_id: int, plate_text: str) -> tuple[int, bool]:
         """Returns (canonical_track_id, is_new_vehicle).

@@ -53,11 +53,11 @@ def classify_plate_category(plate_crop: np.ndarray) -> str:
 
     No crop-size floor is applied on purpose: measured directly, a
     genuinely readable small plate and a false-positive plate detection
-    (PlateTracker occasionally locks onto a mirror/wheel/helmet, not a real
+    (the detector occasionally locks onto a mirror/wheel/helmet, not a real
     plate) land in the same size range, so an area cutoff rejected as many
     real small plates as it filtered out junk. A wrong detection producing
-    a wrong color label is a pre-existing tracker/detector limitation (see
-    plate_tracker.py), not something color classification can fix.
+    a wrong color label is a pre-existing detector limitation (see
+    vehicle_tracker.py), not something color classification can fix.
     """
     if plate_crop is None or plate_crop.size == 0:
         return "unknown"

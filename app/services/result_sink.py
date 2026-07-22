@@ -13,10 +13,17 @@ class DetectionResult:
     camera_id: str
     frame_id: int
     timestamp: float
-    # None for a plateless vehicle box (see PlateTracker.UntrackedVehicle) —
-    # it was never matched a track_id since there's no plate center to
-    # anchor continuity on; these are display-only and never reach OCR/DB.
+    # Every tracked vehicle now gets a real track_id (see VehicleTracker) —
+    # kept Optional for defensive typing, not because a real untracked-
+    # vehicle case exists anymore.
     track_id: int | None
+    # Bumped each time this camera's track_id numbering restarts from
+    # scratch (Pipeline.reset_for_new_cycle — a static video's Play-button
+    # restart; always 0 for a live/RTSP source, which never restarts).
+    # Part of the DB upsert key alongside (camera_id, track_id) specifically
+    # so a replayed video's reused track_id numbers can't silently overwrite
+    # a DIFFERENT vehicle's row from an earlier cycle — see db_sink.py.
+    generation: int
     vehicle_type: str
     # No vehicle-detection stage — plates are tracked directly on the full
     # frame, so there's no vehicle box/confidence to report.

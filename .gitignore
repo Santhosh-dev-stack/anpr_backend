@@ -10,6 +10,7 @@ venv/
 
 # Runtime output — regenerated on every run, never worth committing
 hls_output/
+vehicle_crops/
 
 # Model weights — large binaries (6-22MB+); fetch/download separately
 # (e.g. a setup script or release artifact) rather than committing to git.

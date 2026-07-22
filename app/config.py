@@ -37,8 +37,15 @@ PLATE_DETECTION_IMGSZ = 960
 # This weight is a combined vehicle+plate model (12 classes: car, truck,
 # bus, motorcycle, bicycle, auto, van, emergency_vehicle, tractor, hcm_eme,
 # cart, number_plate) — the pipeline still only wants plates, so detection
-# is filtered to this one class name (see plate_tracker.py).
+# is filtered to this one class name (see vehicle_tracker.py).
 PLATE_CLASS_NAME = "number_plate"
+
+# Vehicle-only gate on top of PLATE_CONF_THRESHOLD's raw detection floor (see
+# vehicle_tracker.py) — a vehicle box below this confidence never reaches
+# the tracker at all, so it can't be assigned a track_id (new or
+# continuing) and isn't counted. Plate detections are unaffected; they're
+# still gated only by PLATE_CONF_THRESHOLD.
+VEHICLE_TRACK_MIN_CONFIDENCE = 0.50
 
 OCR_LANG = "en"
 FRAME_QUEUE_MAXSIZE = 10
@@ -46,11 +53,10 @@ FRAME_QUEUE_MAXSIZE = 10
 # Decimate a video file's frame rate down to this before it ever reaches the
 # pipeline — a fixed, uniform stride (unlike the earlier load-adaptive
 # skipping) that cuts CPU workload substantially while keeping consecutive
-# processed frames close enough together for PlateTracker's nearest-center
-# matcher to still follow normal traffic motion. None/0 disables decimation
-# (process every frame).
+# processed frames close enough together for VehicleTracker's ByteTrack-
+# based IoU matching to still follow normal traffic motion. None/0 disables
+# decimation (process every frame).
 PROCESSING_FPS = 5
-
 
 RTSP_RECONNECT_INITIAL_DELAY = 1.0
 RTSP_RECONNECT_MAX_DELAY = 30.0
@@ -58,6 +64,11 @@ RTSP_RECONNECT_MAX_DELAY = 30.0
 DATABASE_URL = os.environ.get("DATABASE_URL")
 DB_POOL_MIN_CONN = 1
 DB_POOL_MAX_CONN = 5
+
+# One reference crop saved per newly-counted track_id (see Pipeline.
+# _process_vehicle) — a manual sanity-check folder for "is vehicle_count
+# real", not a permanent archive; nothing prunes it automatically.
+VEHICLE_CROPS_DIR = BACKEND_DIR / "vehicle_crops"
 
 HLS_OUTPUT_DIR = BACKEND_DIR / "hls_output"
 FFMPEG_BINARY = "ffmpeg"
@@ -68,7 +79,7 @@ HLS_SEGMENT_SECONDS = 2
 # disk, bounding storage for a camera that runs for days.
 HLS_LIVE_LIST_SIZE = 6
 
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",")
 
 # Host/port the browser should use to reach the FastAPI app (WebSocket + HLS +
 # REST all share this one process/port). Distinct from the bind host
