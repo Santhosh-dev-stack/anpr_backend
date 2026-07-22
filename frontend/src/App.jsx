@@ -26,26 +26,41 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0d12] text-gray-100">
-      <div className="flex items-center gap-2 border-b border-gray-800 p-3">
-        <label className="text-sm text-gray-400" htmlFor="camera-id-input">
-          Camera ID:
-        </label>
-        <input
-          id="camera-id-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && applyCameraId()}
-          className="rounded border border-gray-700 bg-black/40 px-2 py-1 text-sm text-white"
-          placeholder="cam01"
-        />
-        <button
-          onClick={applyCameraId}
-          className="rounded bg-gray-700 px-3 py-1 text-sm font-medium text-white hover:bg-gray-600"
-        >
-          Load
-        </button>
-      </div>
+    <div className="grid min-h-screen grid-cols-[248px_1fr] bg-bg text-gray-100 max-[880px]:grid-cols-1">
+      <aside className="flex flex-col gap-6 border-r border-border bg-panel p-5 max-[880px]:border-r-0 max-[880px]:border-b">
+        <div className="flex items-center gap-2.5 border-b border-border pb-4">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent to-[#1f8a94] font-mono text-sm font-bold text-[#06181a]">
+            AN
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-semibold tracking-wide">ANPR Control</div>
+            <div className="text-xs text-muted">detection node</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="px-1 text-[0.68rem] uppercase tracking-wider text-muted-2" htmlFor="camera-id-input">
+            Camera
+          </label>
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-panel-2 py-1 pl-3 pr-1.5">
+            <input
+              id="camera-id-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && applyCameraId()}
+              className="w-full min-w-0 bg-transparent font-mono text-sm outline-none"
+              placeholder="cam01"
+            />
+            <button
+              onClick={applyCameraId}
+              className="flex-shrink-0 rounded-md bg-accent px-3 py-1 text-xs font-bold text-[#06181a] hover:brightness-110"
+            >
+              Load
+            </button>
+          </div>
+        </div>
+      </aside>
+
       {/* key={cameraId} forces a full remount on camera switch — simpler and
           safer than relying on CameraView's internal effects to reset every
           piece of per-camera state (plateResults, bestByTrack, started...)

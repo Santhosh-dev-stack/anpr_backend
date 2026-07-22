@@ -1,8 +1,54 @@
 @import "tailwindcss";
 
+/* ANPR Control design tokens — see the approved redesign preview.
+   Deliberately dark-only: a real ANPR feed runs on a control-room
+   monitor, not a bright office window. */
+@theme {
+  --color-bg: #0a0e14;
+  --color-panel: #121822;
+  --color-panel-2: #1a212c;
+  --color-panel-3: #212a36;
+  --color-border: #232c37;
+  --color-muted: #7c8998;
+  --color-muted-2: #56626e;
+  --color-accent: #45d3e0;
+  --color-accent-dim: #1f4d54;
+  --color-good: #2fbf71;
+  --color-warn: #e0a52c;
+  --color-bad: #e0503a;
+
+  --color-plate-private: #f4f6f8;
+  --color-plate-private-fg: #14161a;
+  --color-plate-commercial: #f2b705;
+  --color-plate-commercial-fg: #14161a;
+  --color-plate-ev: #1f9d55;
+  --color-plate-ev-fg: #f2fbf5;
+  --color-plate-gov: #1c5fd1;
+  --color-plate-gov-fg: #f2f6fd;
+
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace;
+}
+
 body {
   margin: 0;
-  background: #0b0d12;
-  color: #e5e7eb;
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: #dde5ec;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+::selection {
+  background: var(--color-accent-dim);
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(69, 211, 224, 0.5); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 4px rgba(69, 211, 224, 0); }
+}
+.animate-live-pulse {
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-live-pulse {
+    animation: none;
+  }
 }

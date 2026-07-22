@@ -200,9 +200,9 @@ class VehicleTracker:
 
         Callers must also reset any of their OWN state keyed by track_id
         (Pipeline.reset_for_new_cycle does this for PlateIdentity/
-        _accepted_track_ids/_duplicate_track_ids) — otherwise a reused
-        track_id number could inherit stale bookkeeping from the previous
-        cycle's unrelated vehicle.
+        _duplicate_track_ids) — otherwise a reused track_id number could
+        inherit stale bookkeeping from the previous cycle's unrelated
+        vehicle.
         """
         for tracker in self._byte_trackers.values():
             tracker.reset()

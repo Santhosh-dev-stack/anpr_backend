@@ -47,6 +47,13 @@ PLATE_CLASS_NAME = "number_plate"
 # still gated only by PLATE_CONF_THRESHOLD.
 VEHICLE_TRACK_MIN_CONFIDENCE = 0.50
 
+# Horizontal counting line, as a fraction of frame height (see
+# app/tracking/line_counter.py) — a vehicle is only counted once its
+# tracked centroid's motion segment crosses this line, not merely on first
+# sighting. Assumes roughly top-to-bottom/bottom-to-top traffic flow; no
+# per-camera line orientation concept exists in this codebase yet.
+COUNTING_LINE_Y_FRACTION = 0.6
+
 OCR_LANG = "en"
 FRAME_QUEUE_MAXSIZE = 10
 

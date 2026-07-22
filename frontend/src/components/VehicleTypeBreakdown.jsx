@@ -10,14 +10,14 @@ export default function VehicleTypeBreakdown({ countByType }) {
   }
 
   return (
-    <div className="mb-4 flex max-w-3xl flex-wrap gap-2">
+    <div className="flex max-w-3xl flex-wrap gap-2">
       {entries.map(([type, count]) => (
         <div
           key={type}
-          className="flex items-center gap-1.5 rounded bg-black/40 px-3 py-1.5 text-sm capitalize"
+          className="flex items-center gap-2 rounded-lg border border-border bg-panel px-3 py-2 text-sm"
         >
-          <span className="text-gray-400">{type}</span>
-          <span className="font-semibold text-white">{count}</span>
+          <span className="capitalize text-muted">{type}</span>
+          <span className="font-mono font-bold tabular-nums">{count}</span>
         </div>
       ))}
     </div>

@@ -1,8 +1,21 @@
 import { useEffect, useRef } from 'react'
 
-const VEHICLE_COLOR = '#22c55e'
-const PLATE_COLOR = '#eab308'
+const VEHICLE_COLOR = '#45d3e0'
 const NEAREST_FRAME_TOLERANCE_SEC = 2
+
+// Same real Indian RTO plate-background colors as the plate chips elsewhere
+// in the UI (FinalPlatesTable, DetectionTable) — keeps a detection's plate
+// reading visually identifiable by category directly on the live feed, not
+// just in the tables below it.
+const PLATE_CATEGORY_COLORS = {
+  private: { bg: '#f4f6f8', fg: '#14161a' },
+  commercial: { bg: '#f2b705', fg: '#14161a' },
+  ev: { bg: '#1f9d55', fg: '#f2fbf5' },
+  government: { bg: '#1c5fd1', fg: '#f2f6fd' },
+}
+// A plate box with no category call yet (crop too small/washed-out) or no
+// OCR text yet (still pending) — neutral, not one of the four real colors.
+const PLATE_PENDING_COLOR = { bg: '#3a4450', fg: '#c7cdd2' }
 
 export default function CanvasOverlay({ frames, videoRef, frameWidth, frameHeight }) {
   const canvasRef = useRef(null)
@@ -96,38 +109,93 @@ function drawFrame(ctx, canvas, vidW, vidH, frameWidth, frameHeight, detections)
   const sx = renderW / frameWidth
   const sy = renderH / frameHeight
 
-  ctx.lineWidth = Math.max(2, canvas.width / 400)
-  ctx.font = `${Math.max(14, canvas.width / 60)}px system-ui, sans-serif`
+  const corner = Math.max(8, canvas.width / 60)
+  ctx.lineWidth = Math.max(2, canvas.width / 500)
+  ctx.font = `600 ${Math.max(11, canvas.width / 85)}px ui-monospace, "SF Mono", Consolas, monospace`
   ctx.textBaseline = 'bottom'
 
   for (const d of detections) {
-    // OCR still runs and saves to the DB in the background — the plate text
-    // just isn't shown live here (surfaced later via a detection history
-    // view instead). track_id is null for a plateless vehicle box (see
-    // UntrackedVehicle) — it was never tracked, just detected this frame.
+    // Every vehicle is tracked now (VehicleTracker assigns a track_id to
+    // every vehicle box regardless of whether a plate was found inside it
+    // this frame) — track_id is never null.
     if (d.vehicle_bbox) {
-      const label = d.track_id === null ? d.vehicle_type : `${d.vehicle_type} #${d.track_id}`
-      drawBox(ctx, d.vehicle_bbox, VEHICLE_COLOR, label, offsetX, offsetY, sx, sy)
+      const label = `${d.vehicle_type} #${d.track_id}${
+        d.vehicle_confidence != null ? ` · ${Math.round(d.vehicle_confidence * 100)}%` : ''
+      }`
+      drawReticle(ctx, d.vehicle_bbox, VEHICLE_COLOR, label, offsetX, offsetY, sx, sy, corner)
     }
     if (d.plate_bbox) {
-      drawBox(ctx, d.plate_bbox, PLATE_COLOR, `#${d.track_id}`, offsetX, offsetY, sx, sy)
+      const colors = PLATE_CATEGORY_COLORS[d.plate_category] ?? PLATE_PENDING_COLOR
+      drawPlateBox(ctx, d.plate_bbox, d.plate, colors, offsetX, offsetY, sx, sy, corner * 0.6)
     }
   }
 }
 
-function drawBox(ctx, bbox, color, label, offsetX, offsetY, sx, sy) {
+// Bracket-corner "targeting reticle" instead of a full rectangle outline —
+// reads as a live detection system marking a subject, not a plain drawn box.
+function drawReticle(ctx, bbox, color, label, offsetX, offsetY, sx, sy, corner) {
   const [x1, y1, x2, y2] = bbox
   const rx = offsetX + x1 * sx
   const ry = offsetY + y1 * sy
   const rw = (x2 - x1) * sx
   const rh = (y2 - y1) * sy
+  const c = Math.min(corner, rw / 2, rh / 2)
 
   ctx.strokeStyle = color
-  ctx.strokeRect(rx, ry, rw, rh)
+  ctx.beginPath()
+  // top-left
+  ctx.moveTo(rx, ry + c); ctx.lineTo(rx, ry); ctx.lineTo(rx + c, ry)
+  // top-right
+  ctx.moveTo(rx + rw - c, ry); ctx.lineTo(rx + rw, ry); ctx.lineTo(rx + rw, ry + c)
+  // bottom-right
+  ctx.moveTo(rx + rw, ry + rh - c); ctx.lineTo(rx + rw, ry + rh); ctx.lineTo(rx + rw - c, ry + rh)
+  // bottom-left
+  ctx.moveTo(rx + c, ry + rh); ctx.lineTo(rx, ry + rh); ctx.lineTo(rx, ry + rh - c)
+  ctx.stroke()
 
   const textWidth = ctx.measureText(label).width
+  const tagH = Math.max(14, corner * 1.1)
+  ctx.fillStyle = 'rgba(10,14,20,0.75)'
+  ctx.fillRect(rx, ry - tagH - 2, textWidth + 8, tagH)
   ctx.fillStyle = color
-  ctx.fillRect(rx, ry - 20, textWidth + 8, 20)
-  ctx.fillStyle = '#0b0d12'
   ctx.fillText(label, rx + 4, ry - 4)
+}
+
+// A thin reticle around the plate box itself, plus — once OCR has actually
+// accepted a reading — a filled plate-shaped chip rendered in its real RTO
+// category color, matching the plate chips in FinalPlatesTable/
+// DetectionTable rather than a generic colored label.
+function drawPlateBox(ctx, bbox, plateText, colors, offsetX, offsetY, sx, sy, corner) {
+  const [x1, y1, x2, y2] = bbox
+  const rx = offsetX + x1 * sx
+  const ry = offsetY + y1 * sy
+  const rw = (x2 - x1) * sx
+  const rh = (y2 - y1) * sy
+  const c = Math.min(corner, rw / 2, rh / 2)
+
+  ctx.strokeStyle = colors.bg
+  ctx.beginPath()
+  ctx.moveTo(rx, ry + c); ctx.lineTo(rx, ry); ctx.lineTo(rx + c, ry)
+  ctx.moveTo(rx + rw - c, ry); ctx.lineTo(rx + rw, ry); ctx.lineTo(rx + rw, ry + c)
+  ctx.moveTo(rx + rw, ry + rh - c); ctx.lineTo(rx + rw, ry + rh); ctx.lineTo(rx + rw - c, ry + rh)
+  ctx.moveTo(rx + c, ry + rh); ctx.lineTo(rx, ry + rh); ctx.lineTo(rx, ry + rh - c)
+  ctx.stroke()
+
+  if (!plateText) return
+
+  const chipH = Math.max(16, corner * 1.6)
+  const textWidth = ctx.measureText(plateText).width
+  const chipW = textWidth + 12
+  const chipX = rx
+  const chipY = ry + rh + 4
+
+  ctx.fillStyle = colors.bg
+  ctx.fillRect(chipX, chipY, chipW, chipH)
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(chipX, chipY, chipW, chipH)
+  ctx.fillStyle = colors.fg
+  ctx.textBaseline = 'middle'
+  ctx.fillText(plateText, chipX + 6, chipY + chipH / 2 + 1)
+  ctx.textBaseline = 'bottom'
 }

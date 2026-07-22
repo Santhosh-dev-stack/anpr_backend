@@ -13,6 +13,7 @@ from app.services import segment_store
 from app.services.ocr_worker import OcrJob, OcrWorker
 from app.services.plate_identity import PlateIdentity
 from app.services.result_sink import DetectionResult, ResultSink
+from app.tracking.line_counter import LineCounter
 from app.tracking.vehicle_tracker import TrackedVehicle, VehicleTracker
 from app.utils.logger import get_logger
 
@@ -88,6 +89,13 @@ class Pipeline:
         # (pre-PlateIdentity) track_id, since that's what _process_vehicle
         # sees before any result comes back.
         self._accepted_track_ids: set[int] = set()
+        # Counts a vehicle once its tracked centroid crosses a configured
+        # line, not merely on first sighting — this (corrected by
+        # _duplicate_track_ids, same as before) is what store.vehicle_count
+        # now reports; VehicleTracker.total_vehicle_count stays as a
+        # separate "raw tracked identities" diagnostic (still backs
+        # vehicle_crops/).
+        self.line_counter = LineCounter()
         # Bumped by reset_for_new_cycle — see DetectionResult.generation's
         # docstring for why this exists (DB upsert-key collision across a
         # static video's Play-button restarts). Stays 0 forever for a live
@@ -114,6 +122,7 @@ class Pipeline:
         """
         self.cycle_generation += 1
         self.tracker.reset_for_new_cycle()
+        self.line_counter.reset_for_new_cycle()
         self.plate_identity.reset()
         self._duplicate_track_ids.clear()
         self._accepted_track_ids.clear()
@@ -139,13 +148,26 @@ class Pipeline:
         # and real elapsed time ~= wall-clock time anyway.
         track_time = frame.video_time if frame.video_time is not None else frame.timestamp
         tracked = self.tracker.track(frame.image, track_time)
+
+        # Counts a vehicle once its tracked centroid actually crosses the
+        # configured line, not merely on first sighting — independent of
+        # OCR (see line_counter.crossed_count below).
+        frame_height = frame.image.shape[0]
+        for vehicle in tracked:
+            self.line_counter.check_crossing(vehicle.track_id, vehicle.bbox, vehicle.vehicle_type, frame_height)
+
         store = segment_store.get(self.camera_id)
         if store is not None:
             # Corrected for any track_id(s) PlateIdentity has since folded
             # into an earlier one — see PlateIdentity's docstring for why
             # the tracker itself can't avoid minting these in the first place.
-            corrected_count = self.tracker.total_vehicle_count - len(self._duplicate_track_ids)
-            corrected_by_type = dict(self.tracker.count_by_type)
+            # Sourced from line_counter (counts on actual line-crossing, not
+            # merely on first sighting) rather than
+            # tracker.total_vehicle_count/count_by_type — those stay as a
+            # separate "raw tracked identities" diagnostic (still backs
+            # vehicle_crops/).
+            corrected_count = self.line_counter.crossed_count - len(self._duplicate_track_ids)
+            corrected_by_type = dict(self.line_counter.crossed_count_by_type)
             for vtype in self._duplicate_track_ids.values():
                 corrected_by_type[vtype] = corrected_by_type.get(vtype, 0) - 1
             store.set_vehicle_count(corrected_count, corrected_by_type)
@@ -160,6 +182,7 @@ class Pipeline:
         track_id: int,
         frame_id: int,
         timestamp: float,
+        generation: int,
         vehicle_type: str,
         plate_category: str,
         plate_text: str | None,
@@ -215,7 +238,11 @@ class Pipeline:
                 frame_id=frame_id,
                 timestamp=timestamp,
                 track_id=track_id,
-                generation=self.cycle_generation,
+                # From the OcrJob, captured at submission time — not
+                # self.cycle_generation, which may have already moved on to
+                # a new cycle by the time this async result lands (see
+                # OcrJob.generation's docstring).
+                generation=generation,
                 vehicle_type=vehicle_type,
                 vehicle_bbox=None,
                 plate_bbox=None,
@@ -251,16 +278,13 @@ class Pipeline:
             # OcrJob below so the OCR thread doesn't need to redo it.
             plate_category = classify_plate_category(plate_crop)
 
-            # No throttling gate before a track has a confirmed reading —
             # OCR is attempted on every frame a plate is found inside this
             # vehicle's box, as long as it isn't already mid-OCR for this
-            # track (see OcrWorker.is_pending). Throttling traded away real
-            # reads (a track's one gated attempt often landed on a
-            # blurry/angled frame) for less CPU work; removed in favor of
-            # just doing the work. But once a track_id has already produced
-            # one accepted reading, every further attempt is just the same
-            # crop yielding the same result — pure waste that also piles up
-            # identical rows in the Detection Table — so that's still gated.
+            # track (see OcrWorker.is_pending). But once a track_id has
+            # already produced one confident-enough accepted reading,
+            # every further attempt is just the same crop yielding the
+            # same result — pure waste that also piles up identical rows
+            # in the Detection Table — so that's gated off.
             if (
                 vehicle.track_id not in self._accepted_track_ids
                 and not self.ocr_worker.is_pending(vehicle.track_id)
@@ -270,6 +294,7 @@ class Pipeline:
                         track_id=vehicle.track_id,
                         frame_id=frame.frame_id,
                         timestamp=frame.timestamp,
+                        generation=self.cycle_generation,
                         vehicle_type=vehicle.vehicle_type,
                         plate_category=plate_category,
                         plate_crop=plate_crop,

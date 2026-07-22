@@ -132,20 +132,44 @@ export default function CameraView({ cameraId }) {
     return Array.from(bestByTrack.values()).sort((a, b) => b.track_id - a.track_id)
   }, [bestByTrack])
 
-  if (error) return <p className="text-red-400">Failed to load camera: {error}</p>
-  if (!camera) return <p className="text-gray-400">Loading camera {cameraId}...</p>
+  if (error) {
+    return (
+      <main className="flex items-center justify-center p-8">
+        <p className="text-sm text-bad">Failed to load camera: {error}</p>
+      </main>
+    )
+  }
+  if (!camera) {
+    return (
+      <main className="flex items-center justify-center p-8">
+        <p className="font-mono text-sm text-muted">Loading camera {cameraId}…</p>
+      </main>
+    )
+  }
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-semibold mb-3">Camera: {camera.camera_id}</h1>
+    <main className="flex max-w-[1180px] flex-col gap-5 p-5 pb-12">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-[1.05rem] font-semibold tracking-wide">Camera — {camera.camera_id}</h1>
+          <div className="font-mono text-xs text-muted">generation {camera.generation ?? 0}</div>
+        </div>
+        {started && (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+              camera.camera_connected
+                ? 'border-good/30 text-good'
+                : 'border-warn/30 text-warn'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${camera.camera_connected ? 'bg-good' : 'bg-warn'}`} />
+            {camera.camera_connected ? 'Connected' : 'Reconnecting'}
+          </span>
+        )}
+      </div>
+
       {started ? (
         <>
-          <SummaryStats
-            crossed={camera.vehicle_count ?? 0}
-            attempted={attemptedTrackIds.size}
-            platesFound={bestByTrack.size}
-          />
-          <VehicleTypeBreakdown countByType={camera.vehicle_count_by_type ?? {}} />
           <LivePlayer
             cameraId={cameraId}
             hlsUrl={camera.hls_url}
@@ -159,13 +183,32 @@ export default function CameraView({ cameraId }) {
               setAttemptedTrackIds(new Set())
             }}
           />
-          <h2 className="mt-4 text-lg font-semibold">Final Plates</h2>
-          <FinalPlatesTable plates={finalPlates} />
-          <h2 className="mt-6 text-lg font-semibold">All OCR Attempts</h2>
-          <DetectionTable results={plateResults} />
+
+          <SummaryStats
+            crossed={camera.vehicle_count ?? 0}
+            attempted={attemptedTrackIds.size}
+            platesFound={bestByTrack.size}
+          />
+          <VehicleTypeBreakdown countByType={camera.vehicle_count_by_type ?? {}} />
+
+          <section className="max-w-3xl overflow-hidden rounded-xl border border-border bg-panel">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold">Final Plates</h2>
+              <span className="font-mono text-xs tabular-nums text-muted">{finalPlates.length} vehicles</span>
+            </div>
+            <FinalPlatesTable plates={finalPlates} />
+          </section>
+
+          <section className="max-w-3xl overflow-hidden rounded-xl border border-border bg-panel">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold">All OCR Attempts</h2>
+              <span className="font-mono text-xs tabular-nums text-muted">{plateResults.length} logged</span>
+            </div>
+            <DetectionTable results={plateResults} />
+          </section>
         </>
       ) : (
-        <div className="flex h-96 w-full max-w-3xl items-center justify-center rounded bg-black/40">
+        <div className="flex aspect-video w-full max-w-3xl items-center justify-center rounded-xl border border-border bg-panel">
           <button
             onClick={async () => {
               try {
@@ -179,12 +222,12 @@ export default function CameraView({ cameraId }) {
                 setError(err.message)
               }
             }}
-            className="rounded bg-green-600 px-8 py-4 text-lg font-medium text-white hover:bg-green-500"
+            className="rounded-lg bg-accent px-8 py-3.5 text-base font-bold text-[#06181a] hover:brightness-110"
           >
             ▶ Play
           </button>
         </div>
       )}
-    </div>
+    </main>
   )
 }

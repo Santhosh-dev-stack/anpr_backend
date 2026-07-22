@@ -17,6 +17,15 @@ class OcrJob:
     track_id: int
     frame_id: int
     timestamp: float
+    # Captured at submission time, not read live from Pipeline.cycle_generation
+    # when the result comes back — OCR resolves asynchronously on this
+    # worker's own thread, so a job submitted just before a Play-button
+    # restart can still land after reset_for_new_cycle has already bumped
+    # the generation and reset track_id numbering. Using a live read at
+    # callback time would attribute this result to the NEW generation's
+    # already-reissued track_id, silently corrupting an unrelated vehicle's
+    # DB row.
+    generation: int
     vehicle_type: str
     # Computed once by the caller (from the same plate_crop) rather than
     # here, since it's plain color analysis independent of OCR — avoids
@@ -58,7 +67,7 @@ class OcrWorker:
         self,
         ocr_reader: PlateReader,
         on_result: Callable[
-            [int, int, float, str, str, str | None, float | None, np.ndarray, np.ndarray | None, str],
+            [int, int, float, int, str, str, str | None, float | None, np.ndarray, np.ndarray | None, str],
             None,
         ],
         maxsize: int = 12,
@@ -107,8 +116,8 @@ class OcrWorker:
                 if result is None:
                     logger.info("OCR found no readable text for track %d", job.track_id)
                     self._on_result(
-                        job.track_id, job.frame_id, job.timestamp, job.vehicle_type, job.plate_category,
-                        None, None, job.plate_crop, job.vehicle_crop, "no_text",
+                        job.track_id, job.frame_id, job.timestamp, job.generation, job.vehicle_type,
+                        job.plate_category, None, None, job.plate_crop, job.vehicle_crop, "no_text",
                     )
                 else:
                     normalized = normalize_plate(result.text)
@@ -127,8 +136,9 @@ class OcrWorker:
                     # looking 'MZ8J3333').
                     if normalized is not None and is_standard_format(normalized):
                         self._on_result(
-                            job.track_id, job.frame_id, job.timestamp, job.vehicle_type, job.plate_category,
-                            normalized, result.confidence, job.plate_crop, job.vehicle_crop, "accepted",
+                            job.track_id, job.frame_id, job.timestamp, job.generation, job.vehicle_type,
+                            job.plate_category, normalized, result.confidence, job.plate_crop,
+                            job.vehicle_crop, "accepted",
                         )
                     else:
                         logger.info(
@@ -138,8 +148,9 @@ class OcrWorker:
                             job.track_id,
                         )
                         self._on_result(
-                            job.track_id, job.frame_id, job.timestamp, job.vehicle_type, job.plate_category,
-                            result.text, result.confidence, job.plate_crop, job.vehicle_crop, "rejected",
+                            job.track_id, job.frame_id, job.timestamp, job.generation, job.vehicle_type,
+                            job.plate_category, result.text, result.confidence, job.plate_crop,
+                            job.vehicle_crop, "rejected",
                         )
             except Exception:
                 logger.exception("OCR worker failed on track %d", job.track_id)

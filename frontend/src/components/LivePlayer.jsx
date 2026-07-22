@@ -180,11 +180,11 @@ export default function LivePlayer({ cameraId, hlsUrl, detectionsUrl, frameWidth
 
   if (typeof manifestState === 'string') {
     return (
-      <div className="flex h-96 w-full max-w-3xl flex-col items-center justify-center gap-3 rounded bg-black/40 text-gray-300">
-        <p>{manifestState}</p>
+      <div className="flex aspect-video w-full max-w-3xl flex-col items-center justify-center gap-3 rounded-xl border border-border bg-panel text-gray-300">
+        <p className="text-sm">{manifestState}</p>
         <button
           onClick={() => setRetryCount((c) => c + 1)}
-          className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500"
+          className="rounded-md bg-accent px-4 py-1.5 text-sm font-semibold text-[#06181a] hover:brightness-110"
         >
           Retry
         </button>
@@ -194,14 +194,14 @@ export default function LivePlayer({ cameraId, hlsUrl, detectionsUrl, frameWidth
 
   if (manifestState !== true) {
     return (
-      <div className="flex h-96 w-full max-w-3xl items-center justify-center rounded bg-black/40 text-gray-400">
-        Starting stream...
+      <div className="flex aspect-video w-full max-w-3xl items-center justify-center rounded-xl border border-border bg-panel font-mono text-sm text-muted">
+        Starting stream…
       </div>
     )
   }
 
   return (
-    <div className="relative inline-block max-w-full">
+    <div className="relative inline-block max-w-full overflow-hidden rounded-xl border border-border bg-black">
       <video ref={videoRef} controls muted className="max-w-full" />
       <CanvasOverlay
         frames={frames}
@@ -209,11 +209,17 @@ export default function LivePlayer({ cameraId, hlsUrl, detectionsUrl, frameWidth
         frameWidth={frameWidth}
         frameHeight={frameHeight}
       />
-      {currentSegment !== null && (
-        <div className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
-          Segment #{currentSegment}
-        </div>
-      )}
+      <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between">
+        <span className="flex items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 font-mono text-[0.68rem] tracking-wide text-bad">
+          <span className="h-1.5 w-1.5 animate-live-pulse rounded-full bg-bad" />
+          DET+OCR
+        </span>
+        {currentSegment !== null && (
+          <span className="rounded-md bg-black/65 px-2 py-1 font-mono text-[0.68rem] tabular-nums text-muted">
+            segment #{currentSegment}
+          </span>
+        )}
+      </div>
       {!connected && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-lg text-white">
           Camera disconnected — reconnecting...
